@@ -1,7 +1,7 @@
-from ipaddress import ip_network
-from ipify import get_ip
-
 """Generating CloudFormation template."""
+from ipaddress import ip_network
+
+from ipify import get_ip
 
 from troposphere import (
     Base64,
@@ -15,32 +15,33 @@ from troposphere import (
 )
 
 from troposphere.iam import (
-     InstanceProfile,
-     PolicyType as IAMPolicy,
-     Role,
-
+    InstanceProfile,
+    PolicyType as IAMPolicy,
+    Role,
 )
 
 from awacs.aws import (
-     Action,
-     Allow,
-     Policy,
-     Principal,
-     Statement,
-
+    Action,
+    Allow,
+    Policy,
+    Principal,
+    Statement,
 )
+
+from awacs.sts import AssumeRole
 
 ApplicationName = "jenkins"
 ApplicationPort = "8080"
-
 GithubAccount = "vamsi2cosw"
 GithubAnsibleURL = "https://github.com/{}/ansible".format(GithubAccount)
-AnsiblePullCmd = \
-        "/usr/bin/ansible-pull -U {} {}.yml -i localhost".format( GithubAnsibleURL,
-                ApplicationName
-                )
 
 PublicCidrIp = str(ip_network(get_ip()))
+
+AnsiblePullCmd = \
+"/usr/bin/ansible-pull -U {} {}.yml -i localhost".format( GithubAnsibleURL,
+ApplicationName
+)
+
 
 t = Template()
 
@@ -72,53 +73,31 @@ t.add_resource(ec2.SecurityGroup(
     ],
 ))
 
-
-
-
-ud = Base64(Join('\n', [
-    "#!/bin/bash",
-    "yum install --enablerepo=epel -y git", "pip install ansible",
-    AnsiblePullCmd,
-    "echo '*/10 * * * * {}' > /etc/cron.d/ansible- pull".format(AnsiblePullCmd)
+ud = Base64(Join('\n', [ "#!/bin/bash",
+"yum install --enablerepo=epel -y git", 
+"yum install --enablerepo=epel -y ansible",
+AnsiblePullCmd,
+"echo '*/10 * * * * {}' > /etc/cron.d/ansible-pull".format(AnsiblePullCmd)
 ]))
 
 t.add_resource(Role(
-
-        "Role",
-
-            AssumeRolePolicyDocument=Policy(
-
-                        Statement=[
-
-                                        Statement(
-
-                                                            Effect=Allow,
-
-                                                                            Action=[AssumeRole],
-
-                                                                                            Principal=Principal("Service", ["ec2.amazonaws.com"])
-
-                                                                                                        )
-
-                                                ]
-
-                            )
-
-            ))
-
-
+    "Role",
+    AssumeRolePolicyDocument=Policy(
+        Statement=[
+            Statement(
+                Effect=Allow,
+                Action=[AssumeRole],
+                Principal=Principal("Service", ["ec2.amazonaws.com"])
+            )
+        ]
+    )
+))
 
 t.add_resource(InstanceProfile(
-
-        "InstanceProfile",
-
-            Path="/",
-
-                Roles=[Ref("Role")]
-
-                ))
-
-
+    "InstanceProfile",
+    Path="/",
+    Roles=[Ref("Role")]
+))
 
 t.add_resource(ec2.Instance(
     "instance",
@@ -146,3 +125,4 @@ t.add_output(Output(
 ))
 
 print t.to_json()
+
